@@ -1,0 +1,280 @@
+This is to build yocto xfce sdcard image for following SBC's:
+rpi4b  ( Raspberry Pi 4B )
+radxa  ( Rock Pi 4B plus )
+rk3328 ( Renegade ROC-RK3328-CC )
+tinker ( ASUS TinkerBoard )
+
+Steps to build yocto xfce sdcard image:
+
+1. git clone https://github.com/chenphilip888/build-yocto-xfce.git
+   mkdir ${HOME}/download
+   mkdir ${HOME}/sstate-cache
+   sudo apt-get install build-essential git libssl-dev nmap net-tools libncurses5-dev libncursesw5-dev dnsutils vsftpd ftp binfmt-support qemu-user-static scons libncurses5-dev libncursesw5-dev libdbus-glib-1-dev libbluetooth-dev python-setuptools python3-dev python3-pip python3-setuptools libcurl4-openssl-dev gettext dbus-x11 chrpath diffstat gawk texinfo curl flex bison device-tree-compiler python
+ 
+2. Install cross compiler:
+   wget https://releases.linaro.org/components/toolchain/binaries/7.3-2018.05/aarch64-linux-gnu/gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz
+   sudo tar xvf gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz  -C /usr/local/
+   wget https://releases.linaro.org/components/toolchain/binaries/7.3-2018.05/arm-linux-gnueabihf/gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf.tar.xz
+   sudo tar xvf gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf.tar.xz -C /usr/local/
+
+3. cd ~/build-yocto-xfce/rpi4b
+   git clone git://git.yoctoproject.org/poky -b dunfell
+   cd poky
+   git clone git://git.yoctoproject.org/meta-raspberrypi.git -b dunfell
+   git clone https://git.openembedded.org/meta-openembedded -b dunfell
+   source oe-init-build-env
+   cd ../../
+   make apply_patches
+
+   cd poky; source oe-init-build-env;
+   bitbake -s
+   bitbake -c cleansstate xfce-desktop-image
+   bitbake -k xfce-desktop-image
+
+   The result image is in ./tmp/deploy/images/raspberrypi4-64/xfce-desktop-image-raspberrypi4-64.wic.bz2
+   bzip2 -d -f ./tmp/deploy/images/raspberrypi4-64/xfce-desktop-image-raspberrypi4-64.wic.bz2
+   sudo dd if=./tmp/deploy/images/raspberrypi4-64/xfce-desktop-image-raspberrypi4-64.wic of=/dev/mmcblk0 bs=4096 conv=notrunc,fsync
+   eject sdcard; plugin sdcard again
+   sudo vi /media/$USER/boot/config.txt ( delete dtparam=i2c1=on, add
+   dtparam=audio=on
+   dtparam=i2c_arm=on
+   dtparam=spi=on
+   enable_uart=1
+   dtoverlay=vc4-fkms-v3d
+   max_framebuffers=2
+   dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4
+   dtoverlay=uart2 )
+   sudo vi /media/$USER/root/etc/network/interfaces ( delete everything after iface lo inet loopback )
+
+   \rm -rf ~/build-yocto-xfce/rpi4b/poky/build/tmp/work
+
+4. cd ~/build-yocto-xfce/radxa
+   git clone git://git.yoctoproject.org/poky -b dunfell
+   cd poky
+   git clone git://git.openembedded.org/meta-openembedded.git -b dunfell
+   git clone https://github.com/radxa/meta-radxa.git -b dunfell
+   git clone https://github.com/YoeDistro/meta-python2.git -b dunfell
+   source oe-init-build-env
+   cd ../../
+   make apply_patches
+
+   cd poky; source oe-init-build-env;
+   bitbake -s
+   bitbake -c cleansstate u-boot-rockpi-4
+   bitbake u-boot-rockpi-4                ( ignore no such file or directory errors )
+   bitbake -c cleansstate xfce-desktop-image
+   bitbake -k xfce-desktop-image
+
+   The result is in ./tmp/deploy/images/rockpi-4b-rk3399/xfce-desktop-image-rockpi-4b-rk3399-gpt.img
+
+   sudo dd if=./tmp/deploy/images/rockpi-4b-rk3399/xfce-desktop-image-rockpi-4b-rk3399-gpt.img of=/dev/mmcblk0 bs=4096 conv=notrunc,fsync
+   eject sdcard; plugin sdcard again
+   sudo vi /media/$USER/*/etc/network/interfaces ( delete everything after iface lo inet loopback, add
+auto eth0
+iface eth0 inet dhcp )
+   Plugin ethernet cable to SBC.
+
+   \rm -rf ~/build-yocto-xfce/radxa/poky/build/tmp/work
+
+5. cd ~/build-yocto-xfce/rk3328
+   git clone https://github.com/radxa/kernel.git --depth=1 -b release-4.4-rockpi4
+   mv kernel kernel.git
+   \rm -rf kernel.git/.git
+   git clone git://git.yoctoproject.org/poky -b dunfell
+   cd poky
+   git clone git://git.openembedded.org/meta-openembedded.git -b dunfell
+   git clone https://github.com/radxa/meta-radxa.git -b dunfell
+   git clone https://github.com/YoeDistro/meta-python2.git -b dunfell
+   source oe-init-build-env
+   cd ../../
+   make get_kernel
+   vi ./patches/linux-rockpi-4_4.4.bb ( change SRC_URI kernel path to your path )
+   make apply_patches
+
+   cd poky; source oe-init-build-env;
+   bitbake -s
+   bitbake -c cleansstate u-boot-rockpi-4
+   bitbake u-boot-rockpi-4                ( ignore no such file or directory errors )
+   bitbake -c cleansstate xfce-desktop-image
+   bitbake -k xfce-desktop-image
+
+   The result is in ./tmp/deploy/images/evb-rk3328/xfce-desktop-image-evb-rk3328-gpt.img
+
+   sudo dd if=./tmp/deploy/images/evb-rk3328/xfce-desktop-image-evb-rk3328-gpt.img of=/dev/mmcblk0 bs=4096 conv=notrunc,fsync
+   eject sdcard; plugin sdcard again
+   sudo vi /media/$USER/*/etc/network/interfaces ( delete everything after iface lo inet loopback )
+
+   \rm -rf ~/build-yocto-xfce/rk3328/poky/build/tmp/work
+
+6. cd ~/build-yocto-xfce/tinker
+   Skip yocto u-boot, because mainline u-boot spl is bigger than 32 KB, and debian_u-boot has compilation problem in yocto. So compile debian_u-boot separately.
+   git clone https://github.com/TinkerBoard/debian_u-boot.git -b release
+   make u-boot
+
+   wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.10.tar.xz
+   tar -xJf linux-5.10.tar.xz
+   mv linux-5.10 linux-5.10.git
+   \rm -rf linux-5.10.git/.git
+   git clone git://git.yoctoproject.org/poky -b dunfell
+   cd poky
+   git clone git://git.openembedded.org/meta-openembedded.git -b dunfell
+   git clone https://github.com/radxa/meta-radxa.git -b dunfell
+   git clone https://github.com/YoeDistro/meta-python2.git -b dunfell
+   source oe-init-build-env
+   cd ../../
+   make get_kernel
+   vi ./patches/linux-rockpi-4_4.4.bb ( change SRC_URI kernel path to your path )
+   make apply_patches
+
+   cd poky; source oe-init-build-env;
+   bitbake -s
+   bitbake -c cleansstate xfce-desktop-image
+   bitbake -k xfce-desktop-image
+
+   The result is in ./tmp/deploy/images/tinker-rk3288/xfce-desktop-image-tinker-rk3288-gpt.img
+
+   sudo dd if=./tmp/deploy/images/tinker-rk3288/xfce-desktop-image-tinker-rk3288-gpt.img of=/dev/mmcblk0 bs=4096 conv=notrunc,fsync
+   eject sdcard; plugin sdcard again
+   sudo vi /media/$USER/*/etc/network/interfaces ( delete everything after iface lo inet loopback, add
+auto eth0
+iface eth0 inet dhcp )
+   Plugin ethernet cable to SBC.
+
+   \rm -rf ~/build-yocto-xfce/tinker/poky/build/tmp/work
+
+Plugin sdcard to SBC
+
+Login:
+Username: root
+Password: none
+
+Setup wifi: ( for rpi4b and rk3328 )
+Note: rk3328 need to plugin usb wifi dongle.
+
+nmcli dev wifi connect "SSID" password "PASSWORD"
+
+To disable screen blank:
+vi /etc/rc.local ( add
+#!/bin/sh
+/usr/bin/xset -dpms s off s noblank s 0 0 s noexpose
+
+chmod 755 /etc/rc.local
+source /etc/rc.local
+
+\rm /etc/localtime
+ln -s /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
+date
+
+glmark2-es2-drm ( rpi4b run glmark2-es2 )
+
+aplay -l
+
+pip3 install speedtest-cli
+speedtest-cli
+
+------------------------------------------------------------------
+
+gpio tests:  ( for rpi4b and rk3328 )
+
+Parts required:
+1. Seeed Grove starter kit LED, button, buzzer, Grove-LCD RGB Backlight V3.0 JHD1313M2.
+2. Analog Servo.
+3. Adafruit SSD1306 128x32 SPI OLED Display.
+
+The following 8 tests are included: ( see below for tests summary )
+1. uart test
+2. led test
+3. button test
+4. pwm led test
+5. i2c lcd test
+6. tongsong
+7. servo
+8. spi oled test
+
+check kernel driver readiness for rpi4b:
+cat /proc/device-tree/soc/serial@7e201400/status  ( uart 2 )
+cat /proc/device-tree/soc/pwm@7e20c000/status  ( pwm 1 )
+cat /proc/device-tree/soc/i2c@7e804000/status  ( i2c-1 )
+cat /proc/device-tree/soc/spi@7e204000/status  ( spi-0 )
+
+check kernel driver readiness for rk3328:
+cat /proc/device-tree/serial@ff120000/status ( uart 1 )
+cat /proc/device-tree/pwm@ff1b0020/status  ( pwm 2 )
+cat /proc/device-tree/i2c@ff160000/status  ( i2c-1 )
+cat /proc/device-tree/spi@ff190000/status  ( spi-0 )
+
+gpio-test
+
+-----------------------------------------------------------------------------
+
+Here are the summary of the tests:
+
+These tests used Seeed Grove starter kit LED, button, buzzer, Grove-LCD RGB Backlight V3.0 JHD1313M2, Analog Servo and Adafruit SSD1306 128x32 SPI OLED Display.
+
+1. uart test.
+   This test will send uart tx to uart rx for loopback.
+   It sends 0 to 255 to uart tx and receives 0 to 255 from uart rx.
+   Connect gpio pin 27 to pin 28. ( rpi4b uart 2 ).
+   Connect gpio pin  8 to pin 10. ( rk3328 uart 1 ).
+
+2. led test.
+   This test will blink led 5 times.
+   Connect gpio pin 18 to led control. ( rpi4b ).
+   Connect gpio pin 18 to led control. ( rk3328 ).
+   Connect gpio pin  2 to led 5V.
+   Connect gpio pin  9 to led ground.
+
+3. button test.
+   Push button 10 times. The led will on/off 10 times.
+   Connect gpio pin 18 to led control. ( rpi4b ).
+   Connect gpio pin 18 to led control. ( rk3328 ).
+   Connect gpio pin  2 to led 5V.
+   Connect gpio pin  9 to led ground.
+   Connect gpio pin 16 to button control. ( rpi4b ).
+   Connect gpio pin 16 to button control. ( rk3328 ).
+   Connect gpio pin  4 to button 5V.
+   Connect gpio pin  6 to button ground.
+
+4. pwm led test.
+   This test will dim led 10 times.
+   Connect gpio pin 33 to led control. ( rpi4b pwm 1 ).
+   Connect gpio pin 12 to led control. ( rk3328 pwm 2 ).
+   Connect gpio pin  2 to led 5V.
+   Connect gpio pin  9 to led ground.
+
+5. i2c lcd test.
+   This test will change lcd backlight color for 5 cycles.
+   Then it will display two sentences on lcd display.
+   Connect gpio pin  3 to lcd display SDA. ( rpi4b i2c-1 ).
+   Connect gpio pin  5 to lcd display SCL.
+   Connect gpio pin 27 to lcd display SDA. ( rk3328 i2c-1 ).
+   Connect gpio pin 28 to lcd display SCL.
+   Connect gpio pin  2 to lcd display 5V.
+   Connect gpio pin  9 to lcd display ground.
+
+6. tongsong.
+   This test will generate song using buzzer.
+   Connect gpio pin 33 to buzzer control. ( same as 4. pwm led test )
+   Connect gpio pin  2 to buzzer 5V.
+   Connect gpio pin  9 to buzzer ground.
+
+7. servo.
+   This test will turn servo 45 degree - 90 degree - 45 degree - 0 degree etc.
+   Connect gpio pin 33 to servo control. ( same as 4. pwm led test )
+   Connect gpio pin  2 to servo 5V.
+   Connect gpio pin  9 to servo ground.
+
+8. spi oled test.
+   This test will show some ascii characters on the oled display.
+   Connect gpio pin 18 to oled display DC.  ( rpi4b spi-0 )
+   Connect gpio pin 24 to oled display CS.
+   Connect gpio pin 19 to oled display TX.
+   Connect gpio pin 23 to oled display CLK.
+   Connect gpio pin 18 to oled display DC.  ( rk3328 spi-0 )
+   Connect gpio pin 24 to oled display CS.
+   Connect gpio pin 19 to oled display TX.
+   Connect gpio pin 23 to oled display CLK.
+   Connect gpio pin  1 to oled display 3.3V.
+   Connect gpio pin  9 to oled display ground.
+
+-----------------------------------------------------------------------------
